@@ -18,7 +18,7 @@ OpenClaw Installer 是一个全可视化的安装工具，无需任何命令行�
 
 **Apple Silicon (M1/M2/M3) 和 Intel Mac 通用版本**
 
-[⬇️ 下载 OpenClaw-Installer.dmg](https://github.com/你的用户名/OpenClaw-installer/releases/latest/download/OpenClaw-Installer_universal.dmg)
+[⬇️ 下载 OpenClaw-Installer.dmg](https://github.com/happydog-intj/OpenClaw-installer/releases/latest/download/OpenClaw-Installer_universal.dmg)
 
 1. 下载 `.dmg` 文件
 2. 双击打开
@@ -151,13 +151,13 @@ openclaw update
 - [OpenClaw 文档](https://docs.openclaw.ai)
 - [OpenClaw GitHub](https://github.com/openclaw/openclaw)
 - [飞书插件文档](https://github.com/AlexAnys/openclaw-feishu)
-- [问题反馈](https://github.com/你的用户名/OpenClaw-installer/issues)
+- [问题反馈](https://github.com/happydog-intj/OpenClaw-installer/issues)
 
 ## 🤝 贡献
 
 欢迎提交 Issue 和 Pull Request！
 
-如果你在使用中遇到问题或有功能建议，请[提交 Issue](https://github.com/你的用户名/OpenClaw-installer/issues/new)。
+如果你在使用中遇到问题或有功能建议，请[提交 Issue](https://github.com/happydog-intj/OpenClaw-installer/issues/new)。
 
 ## 📄 开源协议
 
