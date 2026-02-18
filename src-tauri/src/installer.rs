@@ -24,9 +24,10 @@ pub async fn install_single_dependency(
     emit_progress(window, &format!("正在安装 {}", name), "running", 0.0, vec![]);
 
     match name {
+        "nvm" => install_nvm(window).await?,
         "nodejs" => install_nodejs(window).await?,
         "git" => install_git(window).await?,
-        "homebrew" => install_homebrew(window).await?,
+        "xcode-tools" => install_xcode_tools(window).await?,
         _ => return Err(format!("未知依赖: {}", name).into()),
     }
 
@@ -51,14 +52,7 @@ pub async fn install_openclaw(
         return Err(format!("缺少依赖: {}", names.join(", ")).into());
     }
 
-    // 步骤 2: 配置 npm（Linux 需要）
-    #[cfg(target_os = "linux")]
-    {
-        emit_progress(window, "配置 npm 全局路径", "running", 30.0, vec![]);
-        configure_npm_prefix(window).await?;
-    }
-
-    // 步骤 3: 安装 OpenClaw
+    // 步骤 2: 安装 OpenClaw
     emit_progress(window, "安装 OpenClaw", "running", 50.0, vec![]);
     
     match options.method.as_str() {
@@ -79,50 +73,31 @@ pub async fn install_openclaw(
     Ok("安装成功！".to_string())
 }
 
-// macOS: 安装 Node.js
-#[cfg(target_os = "macos")]
-async fn install_nodejs(window: &Window) -> Result<(), Box<dyn std::error::Error>> {
-    emit_progress(window, "通过 Homebrew 安装 Node.js 22", "running", 0.0, vec![]);
-    
-    let output = Command::new("brew")
-        .args(&["install", "node@22"])
-        .output()?;
-
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("安装失败: {}", error).into());
-    }
-
-    Ok(())
-}
-
-// macOS: 安装 Git
-#[cfg(target_os = "macos")]
-async fn install_git(window: &Window) -> Result<(), Box<dyn std::error::Error>> {
-    emit_progress(window, "通过 Homebrew 安装 Git", "running", 0.0, vec![]);
-    
-    let output = Command::new("brew")
-        .args(&["install", "git"])
-        .output()?;
-
-    if !output.status.success() {
-        let error = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("安装失败: {}", error).into());
-    }
-
-    Ok(())
-}
-
-// macOS: 安装 Homebrew
-#[cfg(target_os = "macos")]
-async fn install_homebrew(window: &Window) -> Result<(), Box<dyn std::error::Error>> {
-    emit_progress(window, "安装 Homebrew（可能需要输入密码）", "running", 0.0, vec![]);
+// 安装 nvm
+async fn install_nvm(window: &Window) -> Result<(), Box<dyn std::error::Error>> {
+    emit_progress(window, "安装 nvm (Node Version Manager)", "running", 0.0, vec![]);
     
     let output = Command::new("bash")
-        .args(&[
-            "-c",
-            "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        ])
+        .arg("-c")
+        .arg("curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash")
+        .output()?;
+
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("安装失败: {}", error).into());
+    }
+
+    emit_progress(window, "nvm 安装成功，请重启终端或运行 source ~/.nvm/nvm.sh", "success", 0.0, vec![]);
+    Ok(())
+}
+
+// 通过 nvm 安装 Node.js
+async fn install_nodejs(window: &Window) -> Result<(), Box<dyn std::error::Error>> {
+    emit_progress(window, "通过 nvm 安装 Node.js 22", "running", 0.0, vec![]);
+    
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg("source ~/.nvm/nvm.sh && nvm install 22 && nvm use 22 && nvm alias default 22")
         .output()?;
 
     if !output.status.success() {
@@ -131,6 +106,74 @@ async fn install_homebrew(window: &Window) -> Result<(), Box<dyn std::error::Err
     }
 
     Ok(())
+}
+
+// 安装 Xcode Command Line Tools
+#[cfg(target_os = "macos")]
+async fn install_xcode_tools(window: &Window) -> Result<(), Box<dyn std::error::Error>> {
+    emit_progress(window, "正在触发 Xcode Command Line Tools 安装", "running", 0.0, vec![
+        "这将打开系统安装对话框...".to_string(),
+    ]);
+    
+    let _output = Command::new("xcode-select")
+        .arg("--install")
+        .output()?;
+
+    emit_progress(window, "安装窗口已打开", "success", 0.0, vec![
+        "✓ 已触发 Xcode Command Line Tools 安装对话框".to_string(),
+        "请在系统弹窗中点击【安装】按钮".to_string(),
+        "安装完成后可能需要几分钟".to_string(),
+    ]);
+    
+    Ok(())
+}
+
+// 安装 Git
+async fn install_git(window: &Window) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(target_os = "macos")]
+    {
+        emit_progress(window, "通过 Xcode Command Line Tools 安装 Git", "running", 0.0, vec![]);
+        
+        let _output = Command::new("xcode-select")
+            .arg("--install")
+            .output()?;
+
+        // xcode-select --install 会弹出 GUI 安装对话框
+        emit_progress(window, "已触发 Xcode Command Line Tools 安装窗口，请按照提示操作", "success", 0.0, vec![]);
+        Ok(())
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        emit_progress(window, "通过 winget 安装 Git", "running", 0.0, vec![]);
+        
+        let output = Command::new("winget")
+            .args(&["install", "Git.Git"])
+            .output()?;
+
+        if !output.status.success() {
+            let error = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("安装失败: {}", error).into());
+        }
+
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        emit_progress(window, "通过 apt 安装 Git", "running", 0.0, vec![]);
+        
+        let output = Command::new("sudo")
+            .args(&["apt-get", "install", "-y", "git"])
+            .output()?;
+
+        if !output.status.success() {
+            let error = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("安装失败: {}", error).into());
+        }
+
+        Ok(())
+    }
 }
 
 // Linux: 配置 npm prefix

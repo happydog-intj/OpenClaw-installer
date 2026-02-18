@@ -74,10 +74,10 @@
         "fullscreen": false,
         "resizable": true,
         "title": "OpenClaw Installer",
-        "width": 800,
-        "height": 600,
-        "minWidth": 600,
-        "minHeight": 500,
+        "width": 1200,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 720,
         "center": true
       }
     ]

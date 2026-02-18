@@ -44,7 +44,38 @@
         </div>
       </div>
       
-      <div class="summary" v-if="!loading">
+      <!-- OpenClaw 已安装提示 -->
+      <div v-if="openclawInstalled && !loading" class="openclaw-installed-notice">
+        <div class="notice-header">
+          <span class="notice-icon">🎉</span>
+          <h3>检测到已安装 OpenClaw</h3>
+        </div>
+        <p class="version-info">当前版本: {{ openclawVersion }}</p>
+        
+        <div class="install-options">
+          <div 
+            class="option-card"
+            :class="{ selected: skipInstall }"
+            @click="skipInstall = true"
+          >
+            <div class="option-icon">⏭️</div>
+            <h4>跳过安装</h4>
+            <p>直接进入配置向导</p>
+          </div>
+          
+          <div 
+            class="option-card"
+            :class="{ selected: !skipInstall }"
+            @click="skipInstall = false"
+          >
+            <div class="option-icon">⬆️</div>
+            <h4>升级到最新版</h4>
+            <p>重新安装并更新</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="summary" v-if="!loading && !openclawInstalled">
         <div v-if="allDependenciesMet" class="success">
           ✓ 所有依赖已满足，可以继续安装
         </div>
@@ -58,6 +89,14 @@
           ← 返回
         </button>
         <button 
+          v-if="openclawInstalled && skipInstall"
+          @click="$emit('skip-to-config')"
+          class="btn-primary"
+        >
+          跳过安装，进入配置 →
+        </button>
+        <button 
+          v-else
           @click="$emit('next')"
           :disabled="!allDependenciesMet"
           class="btn-primary"
@@ -73,7 +112,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/tauri'
 
-defineEmits(['next', 'back'])
+defineEmits(['next', 'back', 'skip-to-config'])
 
 interface Dependency {
   name: string
@@ -90,11 +129,23 @@ const loading = ref(true)
 const dependencies = ref<Dependency[]>([])
 const installing = ref<string | null>(null)
 
+const openclawInstalled = computed(() => {
+  const openclaw = dependencies.value.find(d => d.name === 'openclaw')
+  return openclaw?.installed || false
+})
+
+const openclawVersion = computed(() => {
+  const openclaw = dependencies.value.find(d => d.name === 'openclaw')
+  return openclaw?.currentVersion || null
+})
+
 const allDependenciesMet = computed(() => {
   return dependencies.value
     .filter(d => d.required)
     .every(d => d.installed && !d.needsUpdate)
 })
+
+const skipInstall = ref(false)
 
 onMounted(async () => {
   await checkDependencies()
@@ -134,43 +185,52 @@ function getDepClass(dep: Dependency) {
 <style scoped>
 .dependency-check {
   width: 100%;
-  max-width: 700px;
-  padding: 40px;
+  max-width: 800px;
+  padding: 20px;
+  height: 100vh;
+  display: flex;
+  align-items: center;
 }
 
 .container {
   background: white;
   border-radius: 20px;
-  padding: 50px;
+  padding: 30px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 h2 {
-  font-size: 28px;
+  font-size: 17px;
   font-weight: 700;
   color: #333;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .subtitle {
-  font-size: 16px;
+  font-size: 10px;
   color: #666;
-  margin-bottom: 30px;
+  margin-bottom: 15px;
 }
 
 .loading {
   text-align: center;
-  padding: 60px 0;
+  padding: 30px 0;
+  font-size: 10px;
 }
 
 .spinner {
-  width: 50px;
-  height: 50px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
+  width: 30px;
+  height: 30px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #667eea;
   border-radius: 50%;
   animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
+  margin: 0 auto 12px;
 }
 
 @keyframes spin {
@@ -179,15 +239,38 @@ h2 {
 }
 
 .dependencies {
-  margin-bottom: 30px;
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 20px;
+  padding-right: 5px;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f3f4f6;
+}
+
+.dependencies::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dependencies::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 10px;
+}
+
+.dependencies::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+.dependencies::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .dep-item {
   display: flex;
   align-items: center;
-  padding: 20px;
-  margin-bottom: 15px;
-  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 6px;
   transition: all 0.3s;
 }
 
@@ -207,8 +290,8 @@ h2 {
 }
 
 .dep-icon {
-  font-size: 32px;
-  margin-right: 20px;
+  font-size: 17px;
+  margin-right: 10px;
 }
 
 .dep-info {
@@ -216,19 +299,19 @@ h2 {
 }
 
 .dep-info h3 {
-  font-size: 18px;
+  font-size: 11px;
   font-weight: 600;
   color: #333;
-  margin-bottom: 5px;
+  margin-bottom: 2px;
 }
 
 .dep-info .version {
-  font-size: 14px;
+  font-size: 8px;
   color: #10b981;
 }
 
 .dep-info .missing {
-  font-size: 14px;
+  font-size: 8px;
   color: #ef4444;
 }
 
@@ -241,12 +324,13 @@ h2 {
   background: #667eea;
   color: white;
   border: none;
-  padding: 10px 20px;
-  font-size: 14px;
+  padding: 6px 12px;
+  font-size: 8px;
   font-weight: 600;
-  border-radius: 8px;
+  border-radius: 4px;
   cursor: pointer;
   transition: background 0.2s;
+  white-space: nowrap;
 }
 
 .btn-install:hover:not(:disabled) {
@@ -259,11 +343,12 @@ h2 {
 }
 
 .summary {
-  padding: 20px;
-  border-radius: 10px;
-  margin-bottom: 30px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  margin-bottom: 12px;
   text-align: center;
   font-weight: 600;
+  font-size: 10px;
 }
 
 .summary.success {
@@ -276,20 +361,101 @@ h2 {
   color: #ef4444;
 }
 
+.openclaw-installed-notice {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px solid #3b82f6;
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.notice-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.notice-icon {
+  font-size: 17px;
+}
+
+.notice-header h3 {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1e40af;
+  margin: 0;
+}
+
+.version-info {
+  font-size: 9px;
+  color: #1e40af;
+  margin-bottom: 10px;
+  font-weight: 500;
+}
+
+.install-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.option-card {
+  background: white;
+  border: 2px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-align: center;
+}
+
+.option-card:hover {
+  border-color: #3b82f6;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 15px rgba(59, 130, 246, 0.2);
+}
+
+.option-card.selected {
+  border-color: #3b82f6;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 197, 253, 0.1) 100%);
+  box-shadow: 0 3px 12px rgba(59, 130, 246, 0.3);
+}
+
+.option-icon {
+  font-size: 22px;
+  margin-bottom: 6px;
+}
+
+.option-card h4 {
+  font-size: 10px;
+  font-weight: 700;
+  color: #1e40af;
+  margin-bottom: 3px;
+}
+
+.option-card p {
+  font-size: 8px;
+  color: #64748b;
+  margin: 0;
+}
+
 .actions {
   display: flex;
-  gap: 15px;
+  gap: 8px;
   justify-content: space-between;
+  padding-top: 12px;
+  border-top: 2px solid #e5e7eb;
 }
 
 .btn-secondary {
   background: #e5e7eb;
   color: #374151;
   border: none;
-  padding: 12px 30px;
-  font-size: 16px;
+  padding: 8px 16px;
+  font-size: 10px;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: 6px;
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -302,10 +468,10 @@ h2 {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  padding: 12px 30px;
-  font-size: 16px;
+  padding: 8px 16px;
+  font-size: 10px;
   font-weight: 600;
-  border-radius: 10px;
+  border-radius: 6px;
   cursor: pointer;
   transition: transform 0.2s, box-shadow 0.2s;
   flex: 1;
@@ -313,7 +479,7 @@ h2 {
 
 .btn-primary:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 8px 15px rgba(102, 126, 234, 0.4);
 }
 
 .btn-primary:disabled {

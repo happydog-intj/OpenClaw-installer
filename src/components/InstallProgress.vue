@@ -2,26 +2,28 @@
   <div class="install-progress">
     <div class="container">
       <h2>正在安装 OpenClaw</h2>
-      <p class="subtitle">请稍候，这可能需要几分钟...</p>
       
-      <div class="progress-bar">
-        <div 
-          class="progress-fill"
-          :style="{ width: `${progress.progress}%` }"
-        ></div>
+      <div class="progress-section">
+        <div class="progress-bar">
+          <div 
+            class="progress-fill"
+            :style="{ width: `${progress.progress}%` }"
+          ></div>
+        </div>
+        <p class="progress-text">{{ Math.round(progress.progress) }}%</p>
       </div>
-      <p class="progress-text">{{ Math.round(progress.progress) }}%</p>
       
       <div class="current-step">
-        <div class="spinner" v-if="progress.status === 'running'"></div>
-        <h3>{{ progress.step }}</h3>
-        <p>{{ progress.message }}</p>
+        <h3>{{ progress.step || '准备中...' }}</h3>
       </div>
       
-      <div class="logs" v-if="progress.logs && progress.logs.length > 0">
-        <h4>详细日志</h4>
-        <div class="log-content">
+      <div class="logs">
+        <h4>安装日志</h4>
+        <div class="log-content" ref="logContainer">
           <p v-for="(log, i) in progress.logs" :key="i">{{ log }}</p>
+          <p v-if="!progress.logs || progress.logs.length === 0" class="log-empty">
+            等待安装开始...
+          </p>
         </div>
       </div>
     </div>
@@ -29,7 +31,9 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { ref, watch, nextTick } from 'vue'
+
+const props = defineProps<{
   progress: {
     step: string
     status: string
@@ -38,43 +42,59 @@ defineProps<{
     logs: string[]
   }
 }>()
+
+const logContainer = ref<HTMLElement | null>(null)
+
+// 自动滚动到日志底部
+watch(() => props.progress.logs, async () => {
+  await nextTick()
+  if (logContainer.value) {
+    logContainer.value.scrollTop = logContainer.value.scrollHeight
+  }
+}, { deep: true })
 </script>
 
 <style scoped>
 .install-progress {
   width: 100%;
-  max-width: 700px;
-  padding: 40px;
+  max-width: 800px;
+  padding: 20px;
+  height: 100vh;
+  display: flex;
+  align-items: center;
 }
 
 .container {
   background: white;
   border-radius: 20px;
-  padding: 50px;
+  padding: 30px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  text-align: center;
+  width: 100%;
+  height: 90vh;
+  max-height: 700px;
+  display: flex;
+  flex-direction: column;
 }
 
 h2 {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   color: #333;
-  margin-bottom: 10px;
+  margin-bottom: 20px;
+  text-align: center;
 }
 
-.subtitle {
-  font-size: 16px;
-  color: #666;
-  margin-bottom: 40px;
+.progress-section {
+  margin-bottom: 20px;
 }
 
 .progress-bar {
   width: 100%;
-  height: 12px;
+  height: 8px;
   background: #e5e7eb;
   border-radius: 10px;
   overflow: hidden;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .progress-fill {
@@ -84,52 +104,36 @@ h2 {
 }
 
 .progress-text {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 700;
   color: #667eea;
-  margin-bottom: 30px;
+  text-align: center;
 }
 
 .current-step {
   background: #f9fafb;
-  padding: 30px;
-  border-radius: 15px;
-  margin-bottom: 20px;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f3f3f3;
-  border-top: 4px solid #667eea;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+  text-align: center;
 }
 
 .current-step h3 {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
   color: #333;
-  margin-bottom: 10px;
-}
-
-.current-step p {
-  font-size: 14px;
-  color: #666;
+  margin: 0;
 }
 
 .logs {
-  text-align: left;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .logs h4 {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: #333;
   margin-bottom: 10px;
@@ -140,13 +144,40 @@ h2 {
   color: #10b981;
   padding: 15px;
   border-radius: 10px;
-  max-height: 200px;
+  flex: 1;
   overflow-y: auto;
-  font-family: 'Monaco', 'Courier New', monospace;
-  font-size: 12px;
+  font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  scrollbar-width: thin;
+  scrollbar-color: #475569 #1e293b;
+}
+
+.log-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.log-content::-webkit-scrollbar-track {
+  background: #1e293b;
+  border-radius: 10px;
+}
+
+.log-content::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 10px;
+}
+
+.log-content::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 .log-content p {
-  margin: 5px 0;
+  margin: 3px 0;
+  word-break: break-all;
+}
+
+.log-content .log-empty {
+  color: #64748b;
+  font-style: italic;
 }
 </style>

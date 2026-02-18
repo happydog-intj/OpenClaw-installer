@@ -3,6 +3,7 @@ use std::process::Command;
 use regex::Regex;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct DependencyStatus {
     pub name: String,
     pub display_name: String,
@@ -17,6 +18,12 @@ pub struct DependencyStatus {
 pub async fn check_dependencies() -> Result<Vec<DependencyStatus>, Box<dyn std::error::Error>> {
     let mut deps = Vec::new();
 
+    // 检测 OpenClaw
+    deps.push(check_openclaw().await?);
+
+    // 检测 nvm
+    deps.push(check_nvm().await?);
+    
     // 检测 Node.js
     deps.push(check_nodejs().await?);
     
@@ -26,15 +33,85 @@ pub async fn check_dependencies() -> Result<Vec<DependencyStatus>, Box<dyn std::
     // 检测 Git
     deps.push(check_git().await?);
     
-    // 检测包管理器 (macOS: Homebrew, Windows: winget, Linux: apt)
-    deps.push(check_package_manager().await?);
+    // macOS: 检测 Xcode Command Line Tools
+    #[cfg(target_os = "macos")]
+    {
+        deps.push(check_xcode_tools().await?);
+    }
 
     Ok(deps)
 }
 
+async fn check_openclaw() -> Result<DependencyStatus, Box<dyn std::error::Error>> {
+    // 尝试运行 openclaw --version
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg("source ~/.nvm/nvm.sh 2>/dev/null && openclaw --version 2>/dev/null || openclaw --version")
+        .output();
+
+    let (installed, current_version, needs_update) = match output {
+        Ok(output) if output.status.success() => {
+            let version_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            
+            // 提取版本号，格式如 "🦞 OpenClaw 2026.2.14 (c1feda1) ..."
+            let version = if let Some(ver_line) = version_str.lines().next() {
+                // 提取日期版本 "2026.2.14"
+                if let Some(ver) = ver_line.split_whitespace().nth(2) {
+                    ver.to_string()
+                } else {
+                    version_str.lines().next().unwrap_or("unknown").to_string()
+                }
+            } else {
+                "unknown".to_string()
+            };
+            
+            // TODO: 可以添加版本比较逻辑判断是否需要更新
+            (true, Some(version), false)
+        }
+        _ => (false, None, false),
+    };
+
+    Ok(DependencyStatus {
+        name: "openclaw".to_string(),
+        display_name: "OpenClaw".to_string(),
+        required: false, // 检测阶段不标记为必需，让用户选择
+        required_version: "latest".to_string(),
+        current_version,
+        installed,
+        needs_update,
+        install_command: None, // OpenClaw 安装由主流程处理
+    })
+}
+
+async fn check_nvm() -> Result<DependencyStatus, Box<dyn std::error::Error>> {
+    // 检测 nvm 是否存在（检查 ~/.nvm 目录或 NVM_DIR 环境变量）
+    let nvm_dir = std::env::var("NVM_DIR")
+        .unwrap_or_else(|_| format!("{}/.nvm", std::env::var("HOME").unwrap_or_default()));
+    
+    let installed = std::path::Path::new(&nvm_dir).exists();
+    let current_version = if installed {
+        Some("installed".to_string())
+    } else {
+        None
+    };
+
+    Ok(DependencyStatus {
+        name: "nvm".to_string(),
+        display_name: "nvm (Node Version Manager)".to_string(),
+        required: true,
+        required_version: "0.39+".to_string(),
+        current_version,
+        installed,
+        needs_update: false,
+        install_command: Some("curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash".to_string()),
+    })
+}
+
 async fn check_nodejs() -> Result<DependencyStatus, Box<dyn std::error::Error>> {
-    let output = Command::new("node")
-        .arg("--version")
+    // 使用 bash 执行，因为 nvm 是 shell 函数
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg("source ~/.nvm/nvm.sh 2>/dev/null && node --version")
         .output();
 
     let (installed, current_version, needs_update) = match output {
@@ -55,13 +132,14 @@ async fn check_nodejs() -> Result<DependencyStatus, Box<dyn std::error::Error>> 
         current_version,
         installed,
         needs_update,
-        install_command: Some(get_nodejs_install_command()),
+        install_command: Some("nvm install 22 && nvm use 22 && nvm alias default 22".to_string()),
     })
 }
 
 async fn check_npm() -> Result<DependencyStatus, Box<dyn std::error::Error>> {
-    let output = Command::new("npm")
-        .arg("--version")
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg("source ~/.nvm/nvm.sh 2>/dev/null && npm --version")
         .output();
 
     let (installed, current_version) = match output {
@@ -110,100 +188,52 @@ async fn check_git() -> Result<DependencyStatus, Box<dyn std::error::Error>> {
     })
 }
 
-async fn check_package_manager() -> Result<DependencyStatus, Box<dyn std::error::Error>> {
-    #[cfg(target_os = "macos")]
-    {
-        check_homebrew().await
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        check_winget().await
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        check_apt().await
-    }
-}
-
 #[cfg(target_os = "macos")]
-async fn check_homebrew() -> Result<DependencyStatus, Box<dyn std::error::Error>> {
-    let output = Command::new("brew")
-        .arg("--version")
+async fn check_xcode_tools() -> Result<DependencyStatus, Box<dyn std::error::Error>> {
+    // 检测 Xcode Command Line Tools 是否安装
+    let output = Command::new("xcode-select")
+        .arg("-p")
         .output();
 
     let (installed, current_version) = match output {
         Ok(output) if output.status.success() => {
-            let version_str = String::from_utf8_lossy(&output.stdout);
-            let version = version_str.lines().next().unwrap_or("Unknown").to_string();
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            
+            // 尝试获取版本信息
+            let version_output = Command::new("xcode-select")
+                .arg("--version")
+                .output();
+            
+            let version = if let Ok(ver_out) = version_output {
+                if ver_out.status.success() {
+                    let ver_str = String::from_utf8_lossy(&ver_out.stdout);
+                    // 提取版本号，格式如 "xcode-select version 2384."
+                    if let Some(ver) = ver_str.split_whitespace().nth(2) {
+                        format!("installed ({})", ver.trim_end_matches('.'))
+                    } else {
+                        "installed".to_string()
+                    }
+                } else {
+                    "installed".to_string()
+                }
+            } else {
+                "installed".to_string()
+            };
+            
             (true, Some(version))
         }
         _ => (false, None),
     };
 
     Ok(DependencyStatus {
-        name: "homebrew".to_string(),
-        display_name: "Homebrew".to_string(),
-        required: true,
+        name: "xcode-tools".to_string(),
+        display_name: "Xcode Command Line Tools".to_string(),
+        required: false,
         required_version: "any".to_string(),
         current_version,
         installed,
         needs_update: false,
-        install_command: Some("/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"".to_string()),
-    })
-}
-
-#[cfg(target_os = "windows")]
-async fn check_winget() -> Result<DependencyStatus, Box<dyn std::error::Error>> {
-    let output = Command::new("winget")
-        .arg("--version")
-        .output();
-
-    let (installed, current_version) = match output {
-        Ok(output) if output.status.success() => {
-            let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            (true, Some(version))
-        }
-        _ => (false, None),
-    };
-
-    Ok(DependencyStatus {
-        name: "winget".to_string(),
-        display_name: "winget".to_string(),
-        required: true,
-        required_version: "any".to_string(),
-        current_version,
-        installed,
-        needs_update: false,
-        install_command: None, // winget 需要手动安装
-    })
-}
-
-#[cfg(target_os = "linux")]
-async fn check_apt() -> Result<DependencyStatus, Box<dyn std::error::Error>> {
-    let output = Command::new("apt")
-        .arg("--version")
-        .output();
-
-    let (installed, current_version) = match output {
-        Ok(output) if output.status.success() => {
-            let version_str = String::from_utf8_lossy(&output.stdout);
-            let version = version_str.lines().next().unwrap_or("Unknown").to_string();
-            (true, Some(version))
-        }
-        _ => (false, None),
-    };
-
-    Ok(DependencyStatus {
-        name: "apt".to_string(),
-        display_name: "apt".to_string(),
-        required: true,
-        required_version: "any".to_string(),
-        current_version,
-        installed,
-        needs_update: false,
-        install_command: None,
+        install_command: Some("xcode-select --install".to_string()),
     })
 }
 
@@ -223,27 +253,10 @@ fn extract_git_version(version_str: &str) -> String {
     "Unknown".to_string()
 }
 
-fn get_nodejs_install_command() -> String {
-    #[cfg(target_os = "macos")]
-    {
-        "brew install node@22".to_string()
-    }
-
-    #[cfg(target_os = "windows")]
-    {
-        "winget install OpenJS.NodeJS.LTS".to_string()
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs".to_string()
-    }
-}
-
 fn get_git_install_command() -> String {
     #[cfg(target_os = "macos")]
     {
-        "brew install git".to_string()
+        "xcode-select --install".to_string()
     }
 
     #[cfg(target_os = "windows")]

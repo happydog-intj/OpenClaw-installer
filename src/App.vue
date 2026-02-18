@@ -9,6 +9,7 @@
       v-else-if="currentStep === 'check'"
       @next="currentStep = 'options'"
       @back="currentStep = 'welcome'"
+      @skip-to-config="currentStep = 'config'"
     />
     
     <InstallOptions
@@ -20,6 +21,11 @@
     <InstallProgress
       v-else-if="currentStep === 'progress'"
       :progress="installProgress"
+    />
+    
+    <ConfigWizard
+      v-else-if="currentStep === 'config'"
+      @complete="currentStep = 'success'"
     />
     
     <SuccessScreen
@@ -37,9 +43,10 @@ import WelcomeScreen from './components/WelcomeScreen.vue'
 import DependencyCheck from './components/DependencyCheck.vue'
 import InstallOptions from './components/InstallOptions.vue'
 import InstallProgress from './components/InstallProgress.vue'
+import ConfigWizard from './components/ConfigWizard.vue'
 import SuccessScreen from './components/SuccessScreen.vue'
 
-type Step = 'welcome' | 'check' | 'options' | 'progress' | 'success'
+type Step = 'welcome' | 'check' | 'options' | 'progress' | 'config' | 'success'
 
 const currentStep = ref<Step>('welcome')
 const installProgress = ref({
@@ -54,10 +61,10 @@ const installProgress = ref({
 listen('install-progress', (event: any) => {
   installProgress.value = event.payload
   
-  // 安装成功后切换到成功页面
+  // 安装成功后切换到配置向导
   if (event.payload.status === 'success' && event.payload.progress === 100) {
     setTimeout(() => {
-      currentStep.value = 'success'
+      currentStep.value = 'config'
     }, 1000)
   }
 })
