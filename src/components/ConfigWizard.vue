@@ -705,9 +705,28 @@ async function installAndConfigureFeishu() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 先检查依赖
+  await checkDependencies()
+  // 加载现有配置
   loadExistingConfig()
 })
+
+// 检查系统依赖
+async function checkDependencies() {
+  try {
+    const deps = await invoke('check_system_dependencies') as any[]
+    const requiredDeps = deps.filter(d => d.required)
+    const missingDeps = requiredDeps.filter(d => !d.installed || d.needsUpdate)
+    
+    if (missingDeps.length > 0) {
+      const depNames = missingDeps.map(d => d.displayName).join(', ')
+      showToastMessage(`⚠️ 警告：检测到缺失依赖 (${depNames})，部分功能可能无法使用`)
+    }
+  } catch (error) {
+    console.error('检查依赖失败:', error)
+  }
+}
 </script>
 
 <style scoped>

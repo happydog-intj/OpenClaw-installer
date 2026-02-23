@@ -90,14 +90,15 @@
         </button>
         <button 
           v-if="openclawInstalled && skipInstall"
-          @click="$emit('skip-to-config')"
+          @click="handleSkipToConfig"
+          :disabled="!allBasicDependenciesMet"
           class="btn-primary"
         >
           跳过安装，进入配置 →
         </button>
         <button 
           v-else
-          @click="$emit('next')"
+          @click="handleNext"
           :disabled="!allDependenciesMet"
           class="btn-primary"
         >
@@ -112,7 +113,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/tauri'
 
-defineEmits(['next', 'back', 'skip-to-config'])
+const emits = defineEmits(['next', 'back', 'skip-to-config'])
 
 interface Dependency {
   name: string
@@ -142,6 +143,13 @@ const openclawVersion = computed(() => {
 const allDependenciesMet = computed(() => {
   return dependencies.value
     .filter(d => d.required)
+    .every(d => d.installed && !d.needsUpdate)
+})
+
+// 基础依赖检查（不包括 openclaw，只检查 Node.js, npm 等）
+const allBasicDependenciesMet = computed(() => {
+  return dependencies.value
+    .filter(d => d.required && d.name !== 'openclaw')
     .every(d => d.installed && !d.needsUpdate)
 })
 
@@ -179,6 +187,22 @@ function getDepClass(dep: Dependency) {
   if (dep.installed && !dep.needsUpdate) return 'success'
   if (dep.required) return 'error'
   return 'optional'
+}
+
+function handleNext() {
+  if (!allDependenciesMet.value) {
+    alert('请先安装所有必需的依赖项')
+    return
+  }
+  emits('next')
+}
+
+function handleSkipToConfig() {
+  if (!allBasicDependenciesMet.value) {
+    alert('基础依赖未满足，无法进入配置。\n请先安装 Node.js 和 npm。')
+    return
+  }
+  emits('skip-to-config')
 }
 </script>
 
